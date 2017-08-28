@@ -1,5 +1,5 @@
 #!/bin/bash
-# Licensed under the Apache License, Version 2.0 (the "License"); you may not
+# Licensed under the Apache License, Version 2.1 (the "License"); you may not
 # use this file except in compliance with the License. You may obtain a copy of
 # the License at
 #
@@ -13,34 +13,28 @@
 
 set -e
 
-if [ "$1" = 'couchdb' ]; then
+if [ "$1" = '/opt/couchdb/bin/couchdb' ]; then
 	# we need to set the permissions here because docker mounts volumes as root
-	chown -R couchdb:couchdb \
-		/usr/local/var/lib/couchdb \
-		/usr/local/var/log/couchdb \
-		/usr/local/var/run/couchdb \
-		/usr/local/etc/couchdb
+	chown -R couchdb:couchdb /opt/couchdb
 
-	chmod -R 0770 \
-		/usr/local/var/lib/couchdb \
-		/usr/local/var/log/couchdb \
-		/usr/local/var/run/couchdb \
-		/usr/local/etc/couchdb
+	chmod -R 0770 /opt/couchdb/data
 
-	chmod 664 /usr/local/etc/couchdb/*.ini
-	chmod 775 /usr/local/etc/couchdb/*.d
+	chmod 664 /opt/couchdb/etc/*.ini
+	chmod 664 /opt/couchdb/etc/local.d/*.ini
+	chmod 775 /opt/couchdb/etc/*.d
+
+	if [ ! -z "$NODENAME" ] && ! grep "couchdb@" /opt/couchdb/etc/vm.args; then
+		echo "-name couchdb@$NODENAME" >> /opt/couchdb/etc/vm.args
+	fi
 
 	if [ "$COUCHDB_USER" ] && [ "$COUCHDB_PASSWORD" ]; then
 		# Create admin
-		printf "[admins]\n%s = %s\n" "$COUCHDB_USER" "$COUCHDB_PASSWORD" > /usr/local/etc/couchdb/local.d/docker.ini
-		chown couchdb:couchdb /usr/local/etc/couchdb/local.d/docker.ini
+		printf "[admins]\n%s = %s\n" "$COUCHDB_USER" "$COUCHDB_PASSWORD" > /opt/couchdb/etc/local.d/docker.ini
+		chown couchdb:couchdb /opt/couchdb/etc/local.d/docker.ini
 	fi
 
-	printf "[httpd]\nport = %s\nbind_address = %s\n" ${COUCHDB_HTTP_PORT:=5984} ${COUCHDB_HTTP_BIND_ADDRESS:=0.0.0.0} > /usr/local/etc/couchdb/local.d/bind_address.ini
-	chown couchdb:couchdb /usr/local/etc/couchdb/local.d/bind_address.ini
-
 	# if we don't find an [admins] section followed by a non-comment, display a warning
-	if ! grep -Pzoqr '\[admins\]\n[^;]\w+' /usr/local/etc/couchdb; then
+	if ! grep -Pzoqr '\[admins\]\n[^;]\w+' /opt/couchdb/etc/local.d/*.ini; then
 		# The - option suppresses leading tabs but *not* spaces. :)
 		cat >&2 <<-'EOWARN'
 			****************************************************
@@ -56,7 +50,8 @@ if [ "$1" = 'couchdb' ]; then
 		EOWARN
 	fi
 
-	exec gosu couchdb "$@"
+
+	exec "$@"
 fi
 
 exec "$@"
